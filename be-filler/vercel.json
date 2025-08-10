@@ -17,10 +17,5 @@
     "NEXT_PUBLIC_SECRET_KEY": "@next_public_secret_key",
     "NEXT_PUBLIC_YT_API": "@next_public_yt_api",
     "NEXT_PUBLIC_PASSWORD_USER": "@next_public_password_user"
-  },
-  "functions": {
-    "app/api/**/*.ts": {
-      "maxDuration": 30
-    }
   }
 }
