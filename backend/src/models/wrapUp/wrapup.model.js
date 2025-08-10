@@ -1,25 +1,78 @@
-// src/models/wrapUp/wrapup.model.js
 import mongoose from 'mongoose';
+
+// ===== WrapUp Schema =====
+const wrapUpSchema = new mongoose.Schema({
+  userId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
+    required: true 
+  },
+  taxYear: {
+    type: String,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'in-progress', 'completed', 'filed'],
+    default: 'pending'
+  },
+  filingStatus: {
+    type: String,
+    enum: ['not-started', 'in-review', 'approved', 'rejected'],
+    default: 'not-started'
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['unpaid', 'pending', 'paid', 'refunded'],
+    default: 'unpaid'
+  },
+  documents: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Document'
+  }],
+  taxCredits: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'TaxCredit'
+  }],
+  deductions: {
+    bankTransactions: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'BankTransaction'
+    }],
+    utilities: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'UtilityDeduction'
+    }],
+    vehicles: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'VehicleDeduction'
+    }],
+    others: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'OtherDeduction'
+    }]
+  },
+  serviceCharges: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ServiceCharge'
+  }],
+  notes: String,
+  lastUpdated: Date
+}, { timestamps: true });
 
 // ===== User Schema =====
 const userSchema = new mongoose.Schema({
   name: String,
   email: String,
   role: String,
-  // Add your actual user fields here
 }, { timestamps: true });
-
-export const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 // ===== Document Schema =====
 const documentSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   type: String,
   status: String,
-  // other fields...
 }, { timestamps: true });
-
-export const Document = mongoose.models.Document || mongoose.model('Document', documentSchema);
 
 // ===== ServiceCharge Schema =====
 const serviceChargeSchema = new mongoose.Schema({
@@ -31,8 +84,6 @@ const serviceChargeSchema = new mongoose.Schema({
   contactMethods: [String],
 }, { timestamps: true });
 
-export const ServiceCharge = mongoose.models.ServiceCharge || mongoose.model('ServiceCharge', serviceChargeSchema);
-
 // ===== TaxCredit Schema =====
 const taxCreditSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -40,8 +91,6 @@ const taxCreditSchema = new mongoose.Schema({
   amount: Number,
   source: String,
 }, { timestamps: true });
-
-export const TaxCredit = mongoose.models.TaxCredit || mongoose.model('TaxCredit', taxCreditSchema);
 
 // ===== Deduction Schemas =====
 const bankTransactionSchema = new mongoose.Schema({
@@ -51,16 +100,12 @@ const bankTransactionSchema = new mongoose.Schema({
   description: String,
 }, { timestamps: true });
 
-export const BankTransaction = mongoose.models.BankTransaction || mongoose.model('BankTransaction', bankTransactionSchema);
-
 const utilityDeductionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   taxYear: String,
   amount: Number,
   utilityType: String,
 }, { timestamps: true });
-
-export const UtilityDeduction = mongoose.models.UtilityDeduction || mongoose.model('UtilityDeduction', utilityDeductionSchema);
 
 const vehicleDeductionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -69,8 +114,6 @@ const vehicleDeductionSchema = new mongoose.Schema({
   vehicleType: String,
 }, { timestamps: true });
 
-export const VehicleDeduction = mongoose.models.VehicleDeduction || mongoose.model('VehicleDeduction', vehicleDeductionSchema);
-
 const otherDeductionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   taxYear: String,
@@ -78,14 +121,22 @@ const otherDeductionSchema = new mongoose.Schema({
   reason: String,
 }, { timestamps: true });
 
-export const OtherDeduction = mongoose.models.OtherDeduction || mongoose.model('OtherDeduction', otherDeductionSchema);
-
 // ===== Tax Filing Schema =====
 const taxFilingSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   taxYear: String,
-  cnicFiles: [String], // paths to uploaded files
+  cnicFiles: [String],
   ntnCart: { type: Boolean, default: false },
 }, { timestamps: true });
 
+// Export all models
+export const WrapUp = mongoose.models.WrapUp || mongoose.model('WrapUp', wrapUpSchema);
+export const User = mongoose.models.User || mongoose.model('User', userSchema);
+export const Document = mongoose.models.Document || mongoose.model('Document', documentSchema);
+export const ServiceCharge = mongoose.models.ServiceCharge || mongoose.model('ServiceCharge', serviceChargeSchema);
+export const TaxCredit = mongoose.models.TaxCredit || mongoose.model('TaxCredit', taxCreditSchema);
+export const BankTransaction = mongoose.models.BankTransaction || mongoose.model('BankTransaction', bankTransactionSchema);
+export const UtilityDeduction = mongoose.models.UtilityDeduction || mongoose.model('UtilityDeduction', utilityDeductionSchema);
+export const VehicleDeduction = mongoose.models.VehicleDeduction || mongoose.model('VehicleDeduction', vehicleDeductionSchema);
+export const OtherDeduction = mongoose.models.OtherDeduction || mongoose.model('OtherDeduction', otherDeductionSchema);
 export const TaxFiling = mongoose.models.TaxFiling || mongoose.model('TaxFiling', taxFilingSchema);

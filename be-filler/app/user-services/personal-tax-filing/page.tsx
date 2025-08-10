@@ -47,6 +47,31 @@ interface ITaxFiling {
     amount?: number
   }
   remarks?: string
+  progress?: {
+    completedSteps: number
+    totalSteps: number
+    progressPercentage: number
+    isComplete: boolean
+    canSubmit: boolean
+  }
+  currentStep?: {
+    stepKey: string
+    stepName: string
+    description: string
+    isCompleted: boolean
+    order: number
+  }
+  steps?: Array<{
+    stepKey: string
+    stepName: string
+    description: string
+    order: number
+    isCompleted: boolean
+    completedAt?: string
+    recordCount: number
+    summary: any
+    data: any
+  }>
 }
 
 interface IFamilyTag {
@@ -114,77 +139,104 @@ const TaxFilingsPage = () => {
   }, [isClient, router])
 
   const loadFilings = async () => {
-  try {
-    setLoading(true)
-    // Call the new comprehensive API endpoint
-const currentYear = new Date().getFullYear();
-const response = await fetch(`http://localhost:5000/api/tax-filing/comprehensive/data?taxYear=${currentYear}`, {
+    try {
+      setLoading(true)
+      const userId = user?._id
+      if (!userId) {
+        throw new Error("User ID not found")
+      }
 
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Cookies.get("token")}`,
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch tax data: ${response.status}`)
-    }
-
-    const data = await response.json()
-    
-    // Transform the API response into the expected filings format
-    const transformedFilings: ITaxFiling[] = []
-    
-    // If there's an actual tax filing in the response
-    if (data.data.taxFiling) {
-      transformedFilings.push({
-        _id: data.data.taxFiling._id,
-        taxYear: parseInt(data.data.taxFiling.taxYear),
-        filingType: "individual", // or determine from data
-        status: data.data.taxFiling.status || "pending",
-        personalInfo: {
-          fullName: data.data.user.fullName
+      const response = await fetch(`http://localhost:5000/api/filing-steps/user/${userId}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Cookies.get("token")}`,
         },
-        createdAt: data.data.taxFiling.createdAt,
-        payment: data.data.taxFiling.payment ? {
-          amount: data.data.taxFiling.payment.amount
-        } : undefined,
-        remarks: data.data.taxFiling.remarks
       })
-    } else {
-      // Create a mock filing based on the comprehensive data
-      transformedFilings.push({
-        _id: `draft-${data.data.user._id}-2024`,
-        taxYear: 2024,
-        filingType: "individual",
-        status: "draft",
-        personalInfo: {
-          fullName: data.data.user.fullName
-        },
-        createdAt: new Date().toISOString(),
-        payment: undefined,
-        remarks: "Draft filing based on comprehensive data"
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tax data: ${response.status}`)
+      }
+
+      const { data } = await response.json()
+
+      // Transform the API response into the ITaxFiling format
+      const transformedFilings: ITaxFiling[] = []
+
+      if (data.taxFiling) {
+        const personalInfoStep = data.steps.find((step: any) => step.stepKey === "personalInfo")?.data?.[0] || {}
+        transformedFilings.push({
+          _id: data.taxFiling.id,
+          taxYear: parseInt(
+            data.steps.find((step: any) => step.stepKey === "taxYear")?.data?.taxYear || new Date().getFullYear().toString()
+          ),
+          filingType: "individual", // Adjust based on your logic or API data
+          status: data.progress.isComplete ? "completed" : data.progress.canSubmit ? "pending" : "draft",
+          personalInfo: {
+            fullName: personalInfoStep.fullName || user.fullName || "Not provided",
+          },
+          createdAt: data.taxFiling.createdAt,
+          payment: undefined, // Update if payment data is available in the API
+          remarks: data.currentStep?.description || "In progress",
+          progress: {
+            completedSteps: data.progress.completedSteps,
+            totalSteps: data.progress.totalSteps,
+            progressPercentage: data.progress.progressPercentage,
+            isComplete: data.progress.isComplete,
+            canSubmit: data.progress.canSubmit,
+          },
+          currentStep: data.currentStep
+            ? {
+                stepKey: data.currentStep.stepKey,
+                stepName: data.currentStep.stepName,
+                description: data.currentStep.description,
+                isCompleted: data.currentStep.isCompleted,
+                order: data.currentStep.order,
+              }
+            : undefined,
+          steps: data.steps.map((step: any) => ({
+            stepKey: step.stepKey,
+            stepName: step.stepName,
+            description: step.description,
+            order: step.order,
+            isCompleted: step.isCompleted,
+            completedAt: step.completedAt,
+            recordCount: step.recordCount,
+            summary: step.summary,
+            data: step.data,
+          })),
+        })
+      } else {
+        // Fallback for no tax filing
+        transformedFilings.push({
+          _id: `draft-${userId}-${new Date().getFullYear()}`,
+          taxYear: new Date().getFullYear(),
+          filingType: "individual",
+          status: "draft",
+          personalInfo: {
+            fullName: user.fullName || "Not provided",
+          },
+          createdAt: new Date().toISOString(),
+          remarks: "Draft filing",
+        })
+      }
+
+      setFilings(transformedFilings)
+
+      // Update user data in cookies if needed
+      if (data.user && typeof window !== "undefined") {
+        Cookies.set("user", JSON.stringify(data.user))
+      }
+    } catch (error) {
+      console.error("Error loading tax data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load tax data. Please try again later.",
+        variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
-
-    setFilings(transformedFilings)
-    
-    // Update user data from the API response if needed
-    if (data.data.user && typeof window !== 'undefined') {
-      Cookies.set("user", JSON.stringify(data.data.user))
-    }
-
-  } catch (error) {
-    console.error("Error loading tax data:", error)
-    toast({
-      title: "Error",
-      description: "Failed to load tax data. Please try again later.",
-      variant: "destructive",
-    })
-  } finally {
-    setLoading(false)
   }
-}
 
   const loadFamilyTags = async () => {
     try {
@@ -226,7 +278,7 @@ const response = await fetch(`http://localhost:5000/api/tax-filing/comprehensive
         let errorMessage = `Failed to save tag: ${response.status}`
 
         try {
-        const errorData = await response.json()
+          const errorData = await response.json()
           errorMessage = errorData.error || errorData.message || errorMessage
         } catch (e) {
           console.error("Couldn't parse error response", e)
@@ -302,31 +354,46 @@ const response = await fetch(`http://localhost:5000/api/tax-filing/comprehensive
 
   const handleOpenModal = () => setIsModalOpen(true)
 
-const handleCreateFiling = async (data: { taxYear: number; filingType: "individual" | "business" }) => {
+  const handleCreateFiling = async (data: { taxYear: number; filingType: "individual" | "business" }) => {
     try {
-        console.log("Creating tax filing with year:", data.taxYear);
-        // Mock response instead of actual API call
-        const mockFiling = {
-            _id: "mock-id-" + Math.random().toString(36).substring(2, 9),
-            taxYear: data.taxYear,
-            filingType: data.filingType
-        };
-        
-        setIsModalOpen(false);
-        toast({
-            title: "Success",
-            description: `Tax filing for ${data.taxYear} created successfully.`,
-        });
-        router.push(`/user-services/personal-tax-filing/${mockFiling._id}/`);
+      const response = await fetch("http://localhost:5000/api/tax-filing/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Cookies.get("token")}`,
+        },
+        body: JSON.stringify({
+          taxYear: data.taxYear,
+          filingType: data.filingType,
+          userId: user._id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to create tax filing: ${response.status}`)
+      }
+
+      const result = await response.json()
+      const newFilingId = result.data.id
+
+      setIsModalOpen(false)
+      toast({
+        title: "Success",
+        description: `Tax filing for ${data.taxYear} created successfully.`,
+      })
+      router.push(`/user-services/personal-tax-filing/${newFilingId}/`)
+
+      // Reload filings to reflect the new filing
+      await loadFilings()
     } catch (error) {
-        console.error("Error creating tax filing:", error);
-        toast({
-            title: "Error",
-            description: "Failed to create tax filing. Please try again.",
-            variant: "destructive",
-        });
+      console.error("Error creating tax filing:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create tax filing. Please try again.",
+        variant: "destructive",
+      })
     }
-};
+  }
 
   const handleResumeFiling = (filingId: string) => {
     router.push(`/user-services/personal-tax-filing/${filingId}/`)
@@ -349,17 +416,25 @@ const handleCreateFiling = async (data: { taxYear: number; filingType: "individu
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, progress?: ITaxFiling["progress"]) => {
     const variants = {
       completed: "bg-green-100 text-green-800 hover:bg-green-200",
       under_review: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
       rejected: "bg-red-100 text-red-800 hover:bg-red-200",
-      pending: "bg-gray-100 text-gray-800 hover:bg-gray-200",
+      pending: "bg-blue-100 text-blue-800 hover:bg-blue-200",
+      draft: "bg-gray-100 text-gray-800 hover:bg-gray-200",
     }
+
+    const effectiveStatus = progress?.isComplete
+      ? "completed"
+      : progress?.canSubmit
+      ? "pending"
+      : status
+
     return (
-      <Badge className={variants[status as keyof typeof variants] || variants.pending}>
-        {getStatusIcon(status)}
-        <span className="ml-1 capitalize">{status.replace("_", " ")}</span>
+      <Badge className={variants[effectiveStatus as keyof typeof variants] || variants.draft}>
+        {getStatusIcon(effectiveStatus)}
+        <span className="ml-1 capitalize">{effectiveStatus.replace("_", " ")}</span>
       </Badge>
     )
   }
@@ -728,7 +803,7 @@ const handleCreateFiling = async (data: { taxYear: number; filingType: "individu
                       <div className="flex items-center gap-3 mb-2">
                         {getFilingTypeIcon(filing.filingType)}
                         <h3 className="text-lg font-semibold text-gray-900">Tax Year {filing.taxYear}</h3>
-                        {getStatusBadge(filing.status)}
+                        {getStatusBadge(filing.status, filing.progress)}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                         <div className="flex items-center gap-2">
@@ -746,6 +821,25 @@ const handleCreateFiling = async (data: { taxYear: number; filingType: "individu
                           </div>
                         )}
                       </div>
+                      {filing.progress && (
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-600">Progress:</span>
+                            <span className="text-sm text-gray-900">{filing.progress.progressPercentage}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+                            <div
+                              className="bg-green-600 h-2.5 rounded-full"
+                              style={{ width: `${filing.progress.progressPercentage}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      {filing.currentStep && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          <span className="font-medium">Current Step:</span> {filing.currentStep.stepName}
+                        </div>
+                      )}
                       {filing.remarks && (
                         <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
                           <strong>Remarks:</strong> {filing.remarks}

@@ -42,6 +42,42 @@ interface ITaxFiling {
     processingSteps: any[]
 }
 
+interface IFilingSteps {
+    taxFiling: {
+        id: string
+        user: {
+            id: string
+        }
+        createdAt: string
+    }
+    progress: {
+        completedSteps: number
+        totalSteps: number
+        progressPercentage: number
+        isComplete: boolean
+        canSubmit: boolean
+    }
+    steps: Array<{
+        stepKey: string
+        stepName: string
+        description: string
+        order: number
+        isCompleted: boolean
+        completedAt: string | null
+        recordCount: number
+        summary: Record<string, any>
+        data: any
+    }>
+    completionSummary: {
+        taxYearComplete: boolean
+        personalInfoComplete: boolean
+        incomeDataComplete: boolean
+        assetDataComplete: boolean
+        liabilitiesComplete: boolean
+        wrapUpComplete: boolean
+    }
+}
+
 export default function TaxFilingManagement() {
     const router = useRouter()
     const { toast } = useToast()
@@ -55,6 +91,9 @@ export default function TaxFilingManagement() {
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [totalCount, setTotalCount] = useState(0)
+    const [stepsData, setStepsData] = useState<IFilingSteps | null>(null)
+    const [stepsLoading, setStepsLoading] = useState(false)
+    const [selectedFiling, setSelectedFiling] = useState<string | null>(null)
     const itemsPerPage = 10
     const user = getCurrentUser()
 
@@ -143,38 +182,64 @@ export default function TaxFilingManagement() {
         fetchTaxFilings()
     }, [toast, currentPage, searchQuery, filters.status])
 
-    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value)
-        setCurrentPage(1) // Reset to first page when searching
+    const fetchFilingSteps = async (userId: string) => {
+        try {
+            setStepsLoading(true)
+            const token = Cookies.get('token')
+            if (!token) {
+                throw new Error("No authentication token found")
+            }
+
+            const response = await fetch(`http://localhost:5000/api/filing-steps/admin/user/${userId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch filing steps: ${response.statusText}`)
+            }
+
+            const data = await response.json()
+            
+            if (!data.success || !data.data) {
+                throw new Error(data.message || "Invalid API response")
+            }
+
+            setStepsData(data.data)
+            setSelectedFiling(userId)
+        } catch (e) {
+            console.error("Error fetching filing steps:", e)
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: e instanceof Error ? e.message : "Failed to fetch filing steps. Please try again.",
+            })
+        } finally {
+            setStepsLoading(false)
+        }
     }
 
-    const handleFilterChange = (value: string) => {
-        setFilters(prev => ({ ...prev, status: value }))
-        setCurrentPage(1) // Reset to first page when filtering
-    }
-
-    const handleViewFiling = (filingId: string) => {
-        router.push(`/admin/tax-filing/${filingId}`)
-    }
-
-    const handleStatusChange = async (filingId: string, newStatus: string) => {
+    const updateFilingStatus = async (userId: string, status: string) => {
         try {
             const token = Cookies.get('token')
             if (!token) {
                 throw new Error("No authentication token found")
             }
 
-            const response = await fetch(`http://localhost:5000/api/admin/tax-filings/${filingId}/status`, {
-                method: 'PATCH',
+            const response = await fetch(`http://localhost:5000/api/filing-steps/admin/user/${userId}/status`, {
+                method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ status: newStatus })
+                body: JSON.stringify({ status })
             })
 
             if (!response.ok) {
-                throw new Error(`Failed to update tax filing status: ${response.statusText}`)
+                throw new Error(`Failed to update filing status: ${response.statusText}`)
             }
 
             const data = await response.json()
@@ -186,11 +251,11 @@ export default function TaxFilingManagement() {
             // Update local state
             setTaxFilings(prev =>
                 prev.map(filing =>
-                    filing.id === filingId 
+                    filing.userId === userId 
                         ? { 
                             ...filing, 
-                            payment: { ...filing.payment, status: newStatus },
-                            status: newStatus
+                            payment: { ...filing.payment, status },
+                            status
                         } 
                         : filing
                 )
@@ -198,11 +263,11 @@ export default function TaxFilingManagement() {
 
             setFilteredFilings(prev =>
                 prev.map(filing =>
-                    filing.id === filingId 
+                    filing.userId === userId 
                         ? { 
                             ...filing, 
-                            payment: { ...filing.payment, status: newStatus },
-                            status: newStatus
+                            payment: { ...filing.payment, status },
+                            status
                         } 
                         : filing
                 )
@@ -220,6 +285,28 @@ export default function TaxFilingManagement() {
                 description: e instanceof Error ? e.message : "Failed to update tax filing status. Please try again.",
             })
         }
+    }
+
+    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchQuery(e.target.value)
+        setCurrentPage(1) // Reset to first page when searching
+    }
+
+    const handleFilterChange = (value: string) => {
+        setFilters(prev => ({ ...prev, status: value }))
+        setCurrentPage(1) // Reset to first page when filtering
+    }
+
+    const handleViewFiling = (filingId: string) => {
+        router.push(`/admin/tax-filing/${filingId}`)
+    }
+
+    const handleViewSteps = (userId: string) => {
+        fetchFilingSteps(userId)
+    }
+
+    const handleStatusChange = async (filingId: string, newStatus: string) => {
+        await updateFilingStatus(filingId, newStatus)
     }
 
     const paginatedFilings = filteredFilings
@@ -340,9 +427,17 @@ export default function TaxFilingManagement() {
                                                         >
                                                             View
                                                         </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleViewSteps(filing.userId)}
+                                                            className="text-[#af0e0e] border-[#af0e0e] hover:bg-[#af0e0e] hover:text-white"
+                                                        >
+                                                            View Steps
+                                                        </Button>
                                                         <Select
                                                             value={filing.payment.status}
-                                                            onValueChange={(value) => handleStatusChange(filing.id, value)}
+                                                            onValueChange={(value) => handleStatusChange(filing.userId, value)}
                                                         >
                                                             <SelectTrigger className="w-[180px]">
                                                                 <SelectValue placeholder="Change Status" />
@@ -395,6 +490,118 @@ export default function TaxFilingManagement() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Steps Modal */}
+            {selectedFiling && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <CardHeader className="bg-gray-50 sticky top-0 z-10">
+                            <div className="flex justify-between items-center">
+                                <CardTitle className="text-xl">
+                                    Filing Steps for {taxFilings.find(f => f.userId === selectedFiling)?.personalInfo.fullName}
+                                </CardTitle>
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={() => setSelectedFiling(null)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            {stepsLoading ? (
+                                <div className="flex justify-center py-8">
+                                    <div className="w-8 h-8 border-4 border-t-[#af0e0e] border-r-transparent border-l-transparent border-b-transparent rounded-full animate-spin"></div>
+                                </div>
+                            ) : stepsData ? (
+                                <div className="space-y-6">
+                                    <div className="bg-blue-50 p-4 rounded-lg">
+                                        <h3 className="font-medium text-blue-800">Progress Summary</h3>
+                                        <div className="mt-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-blue-700">
+                                                    {stepsData.progress.completedSteps} of {stepsData.progress.totalSteps} steps completed
+                                                </span>
+                                                <span className="text-sm font-medium text-blue-800">
+                                                    {stepsData.progress.progressPercentage}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-blue-200 rounded-full h-2.5 mt-1">
+                                                <div 
+                                                    className="bg-blue-600 h-2.5 rounded-full" 
+                                                    style={{ width: `${stepsData.progress.progressPercentage}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                                            <div className={`p-2 rounded ${stepsData.completionSummary.taxYearComplete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                Tax Year: {stepsData.completionSummary.taxYearComplete ? 'Complete' : 'Incomplete'}
+                                            </div>
+                                            <div className={`p-2 rounded ${stepsData.completionSummary.personalInfoComplete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                Personal Info: {stepsData.completionSummary.personalInfoComplete ? 'Complete' : 'Incomplete'}
+                                            </div>
+                                            <div className={`p-2 rounded ${stepsData.completionSummary.incomeDataComplete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                Income Data: {stepsData.completionSummary.incomeDataComplete ? 'Complete' : 'Incomplete'}
+                                            </div>
+                                            <div className={`p-2 rounded ${stepsData.completionSummary.assetDataComplete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                Asset Data: {stepsData.completionSummary.assetDataComplete ? 'Complete' : 'Incomplete'}
+                                            </div>
+                                            <div className={`p-2 rounded ${stepsData.completionSummary.liabilitiesComplete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                Liabilities: {stepsData.completionSummary.liabilitiesComplete ? 'Complete' : 'Incomplete'}
+                                            </div>
+                                            <div className={`p-2 rounded ${stepsData.completionSummary.wrapUpComplete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                Wrap Up: {stepsData.completionSummary.wrapUpComplete ? 'Complete' : 'Incomplete'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <h3 className="font-medium">Detailed Steps</h3>
+                                        <div className="space-y-2">
+                                            {stepsData.steps.map((step) => (
+                                                <div key={step.stepKey} className={`border rounded-lg p-4 ${step.isCompleted ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h4 className="font-medium">
+                                                                {step.order}. {step.stepName}
+                                                            </h4>
+                                                            <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                                                            <div className="mt-2 text-xs text-gray-500">
+                                                                Status: {step.isCompleted ? (
+                                                                    <span className="text-green-600">
+                                                                        Completed on {new Date(step.completedAt!).toLocaleString()}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-yellow-600">Pending</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                                            step.isCompleted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                                        }`}>
+                                                            {step.isCompleted ? 'COMPLETED' : 'PENDING'}
+                                                        </span>
+                                                    </div>
+                                                    {step.recordCount > 0 && (
+                                                        <div className="mt-3 text-xs text-gray-500">
+                                                            Records: {step.recordCount}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center text-gray-500 py-8">
+                                    No steps data available
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     )
 }

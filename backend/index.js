@@ -16,6 +16,10 @@ import personalInfoRouter from "./src/routes/personalInfo.routes.js"
 import incomeSourcesRoutes from "./src/routes/incomeSources.routes.js"
 import taxCreditRoutes from "./src/routes/taxCredits/taxCredits.routes.js"
 import taxFilingRoutes from "./src/routes/taxFilling/taxFiling.Routes.js"
+import filingStepsRoutes from "./src/routes/Filing/filingSteps.routes.js";
+
+
+
 
 // Income Modules
 import agricultureRoutes from "./src/routes/incomeDetails/agriculture.routes.js"
@@ -193,6 +197,7 @@ app.use("/api/wrapup", wrapupRoutes)
 
 app.use("/api/tax-filing/comprehensive", comprehensiveTaxFilingRoutes)
 app.use("/api/tax-filing", paymentProofRoutes)
+app.use("/api/filing-steps", filingStepsRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

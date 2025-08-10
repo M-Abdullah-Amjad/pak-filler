@@ -110,7 +110,7 @@ export default function CheckoutPage() {
           data.availableServices
             ?.find((sc: any) => sc.category === "Tax Filing Services")
             ?.services.find((s: any) => s.serviceName === "Annual Income Tax")
-            ?.fee.replace(/[^\d]/g, "") || 1500
+            ?.fee.replace(/[^\d]/g, "") || 2500
 
         cartItems.push({
           name: "Annual Income Tax",
@@ -126,7 +126,7 @@ export default function CheckoutPage() {
             data.availableServices
               ?.find((sc: any) => sc.category === "NTN Registration")
               ?.services.find((s: any) => s.serviceName === "NTN Registration")
-              ?.fee.replace(/[^\d]/g, "") || 2500
+              ?.fee.replace(/[^\d]/g, "") || 1500
 
           cartItems.push({
             name: "NTN Registration",
