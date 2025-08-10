@@ -100,7 +100,7 @@ const __dirname = path.dirname(__filename)
 
 // Middleware
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'https://your-frontend-domain.vercel.app'],
+  origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'https://pak-filler-front.vercel.app'],
   credentials: true,
   optionsSuccessStatus: 200
 }
