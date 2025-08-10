@@ -99,7 +99,12 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 // Middleware
-app.use(cors())
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'https://your-frontend-domain.vercel.app'],
+  credentials: true,
+  optionsSuccessStatus: 200
+}
+app.use(cors(corsOptions))
 app.use(express.json({ limit: "50mb" })) // Increased limit for bulk operations
 app.use(express.urlencoded({ extended: true, limit: "50mb" }))
 

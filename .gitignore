@@ -10,6 +10,9 @@ build/
 # Environment variables
 .env
 *.env
+.env.local
+.env.production
+.env.development
 
 # Logs
 npm-debug.log*
@@ -24,3 +27,15 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Vercel
+.vercel
+
+# Next.js
+.next/
+.next/*
+out/
+
+# Uploads
+backend/src/uploads/*
+!backend/src/uploads/.gitkeep
